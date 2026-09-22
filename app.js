@@ -6,7 +6,7 @@ import { firebaseConfig } from './firebase-config.js';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  signOut, onAuthStateChanged
+  signOut, onAuthStateChanged, sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
   getFirestore, doc, setDoc, getDoc, addDoc, updateDoc, deleteDoc,
@@ -55,10 +55,20 @@ let muted = false;
 function showLogin(){
   document.getElementById('login-form').style.display = 'block';
   document.getElementById('signup-form').style.display = 'none';
+  document.getElementById('forgot-form').style.display = 'none';
 }
 function showSignup(){
   document.getElementById('login-form').style.display = 'none';
   document.getElementById('signup-form').style.display = 'block';
+  document.getElementById('forgot-form').style.display = 'none';
+}
+function showForgotPassword(){
+  document.getElementById('login-form').style.display = 'none';
+  document.getElementById('signup-form').style.display = 'none';
+  document.getElementById('forgot-form').style.display = 'block';
+  document.getElementById('forgot-email').value = '';
+  document.getElementById('forgot-error').textContent = '';
+  document.getElementById('forgot-success').textContent = '';
 }
 
 async function signup(){
@@ -92,6 +102,33 @@ async function login(){
     await signInWithEmailAndPassword(auth, email, password);
   }catch(e){
     errEl.textContent = friendlyError(e);
+  }
+}
+
+// Registered email par Firebase khud reset link bhejta hai — link sirf usi
+// email ke inbox mein jata hai jo account ke sath registered hai, kisi aur
+// email par nahi ja sakta.
+async function forgotPassword(){
+  const email = document.getElementById('forgot-email').value.trim();
+  const errEl = document.getElementById('forgot-error');
+  const okEl = document.getElementById('forgot-success');
+  errEl.textContent = '';
+  okEl.textContent = '';
+  if(!email){
+    errEl.textContent = 'Pehle apna email daalein.';
+    return;
+  }
+  try{
+    await sendPasswordResetEmail(auth, email);
+    okEl.textContent = 'Agar ye email registered hai, to reset link bhej diya gaya hai — apna email inbox (aur spam folder bhi) check karein.';
+  }catch(e){
+    // "user-not-found" jaanbujh kar generic success jaisa message deta hai
+    // (email enumeration se bachne ke liye) — sirf invalid email format par error dikhega.
+    if((e.code||'').includes('invalid-email')){
+      errEl.textContent = 'Email sahi format mein likho.';
+    } else {
+      okEl.textContent = 'Agar ye email registered hai, to reset link bhej diya gaya hai — apna email inbox (aur spam folder bhi) check karein.';
+    }
   }
 }
 
@@ -694,7 +731,7 @@ function cleanupCallListeners(){
 
 /* ================= EXPOSE TO WINDOW (called from index.html inline handlers) ================= */
 window.TST = {
-  showLogin, showSignup, signup, login, logout,
+  showLogin, showSignup, showForgotPassword, forgotPassword, signup, login, logout,
   renderChatList, openChat, closeChat, sendMessage,
   openNewChatModal, openNewGroupModal, closeModals, validateGroupForm, createGroup,
   openOnlineModal, openProfileModal, onProfilePhotoSelected,
