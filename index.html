@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TST Chat</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ================= AUTH SCREEN ================= -->
+<div id="auth-screen" class="auth-screen">
+  <div class="auth-card">
+    <div class="brand-lg"><span class="mark">TST</span>TST Chat</div>
+
+    <div id="login-form" class="auth-form">
+      <h2>Login</h2>
+      <input type="email" id="login-email" placeholder="Email">
+      <input type="password" id="login-password" placeholder="Password">
+      <button class="btn-primary full" onclick="TST.login()">Login</button>
+      <div class="auth-error" id="login-error"></div>
+      <p class="switch-link">Naya account nahi hai? <a onclick="TST.showSignup()">Sign up</a></p>
+    </div>
+
+    <div id="signup-form" class="auth-form" style="display:none;">
+      <h2>Create account</h2>
+      <input type="text" id="signup-name" placeholder="Your name">
+      <input type="email" id="signup-email" placeholder="Email">
+      <input type="password" id="signup-password" placeholder="Password (6+ characters)">
+      <button class="btn-primary full" onclick="TST.signup()">Sign up</button>
+      <div class="auth-error" id="signup-error"></div>
+      <p class="switch-link">Pehle se account hai? <a onclick="TST.showLogin()">Login</a></p>
+    </div>
+  </div>
+</div>
+
+<!-- ================= MAIN APP ================= -->
+<div id="app" style="display:none;">
+  <div id="sidebar">
+    <div class="sb-header">
+      <div class="brand"><span class="mark">TST</span>TST Chat</div>
+      <div class="sb-header-actions">
+        <button class="icon-btn" title="New chat" onclick="TST.openNewChatModal()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <button class="icon-btn" title="New group" onclick="TST.openNewGroupModal()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </button>
+        <button class="icon-btn" title="Logout" onclick="TST.logout()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="search-wrap">
+      <div class="search-box">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#54656F" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="search-input" placeholder="Search chats" oninput="TST.renderChatList()">
+      </div>
+    </div>
+    <div class="chat-list" id="chat-list"></div>
+  </div>
+
+  <div id="chat-area">
+    <div class="empty-state" id="empty-state">
+      <div class="mark-big">TST</div>
+      <h2>TST Chat</h2>
+      <div style="max-width:320px;font-size:14px;">Select a chat to start messaging, or tap + to start a new one.</div>
+    </div>
+
+    <div id="active-chat" style="display:none;flex-direction:column;height:100%;">
+      <div class="chat-header">
+        <button class="icon-btn back-btn" onclick="TST.closeChat()">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#54656F" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <div class="avatar" id="ch-avatar">?</div>
+        <div class="name-wrap">
+          <div class="cname" id="ch-name">—</div>
+          <div class="cstatus" id="ch-status">—</div>
+        </div>
+        <button class="icon-btn" title="Voice call" onclick="TST.startCall()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.02-.24c1.12.37 2.33.57 3.57.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.61 21 3 13.39 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.24.2 2.45.57 3.57a1 1 0 0 1-.25 1.02l-2.2 2.2z"/></svg>
+        </button>
+      </div>
+      <div class="messages" id="messages"></div>
+      <div class="composer">
+        <input id="msg-input" placeholder="Type a message" onkeydown="if(event.key==='Enter')TST.sendMessage()">
+        <button class="send-btn" onclick="TST.sendMessage()">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="white"><path d="M3 20l18-8L3 4v6l12 2-12 2z"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= INCOMING CALL BANNER ================= -->
+<div id="incoming-call" class="incoming-call">
+  <div class="avatar" id="incoming-avatar">?</div>
+  <div class="incoming-mid">
+    <div id="incoming-name" style="font-weight:600;">—</div>
+    <div style="font-size:12.5px;color:#667781;">Incoming voice call…</div>
+  </div>
+  <button class="call-icon-btn end small" onclick="TST.declineCall()" title="Decline">✕</button>
+  <button class="call-icon-btn active small" onclick="TST.acceptCall()" title="Accept">✓</button>
+</div>
+
+<!-- ================= CALL OVERLAY ================= -->
+<div id="call-overlay">
+  <div class="call-top">
+    <div class="call-avatar" id="call-avatar">?</div>
+    <div class="call-name" id="call-name">—</div>
+    <div class="call-status ringing" id="call-status">Calling…</div>
+  </div>
+  <div class="call-controls">
+    <button class="call-icon-btn" id="mute-btn" onclick="TST.toggleMute()" title="Mute">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/></svg>
+    </button>
+    <button class="call-icon-btn end" onclick="TST.endCall()" title="End call">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="white" transform="rotate(135)"><path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.02-.24c1.12.37 2.33.57 3.57.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.61 21 3 13.39 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.24.2 2.45.57 3.57a1 1 0 0 1-.25 1.02l-2.2 2.2z"/></svg>
+    </button>
+  </div>
+  <audio id="remote-audio" autoplay></audio>
+</div>
+
+<!-- ================= NEW CHAT MODAL ================= -->
+<div class="modal-backdrop" id="new-chat-modal">
+  <div class="modal">
+    <div class="modal-header"><span>New chat</span><span style="cursor:pointer" onclick="TST.closeModals()">✕</span></div>
+    <div class="modal-body" id="new-chat-contacts"></div>
+  </div>
+</div>
+
+<!-- ================= NEW GROUP MODAL ================= -->
+<div class="modal-backdrop" id="new-group-modal">
+  <div class="modal">
+    <div class="modal-header"><span>New group</span><span style="cursor:pointer" onclick="TST.closeModals()">✕</span></div>
+    <div class="modal-body">
+      <input type="text" id="group-name-input" placeholder="Group name" oninput="TST.validateGroupForm()">
+      <div id="new-group-contacts"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-primary" id="create-group-btn" disabled onclick="TST.createGroup()">Create</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
