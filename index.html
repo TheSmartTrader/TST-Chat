@@ -19,7 +19,6 @@
       <input type="password" id="login-password" placeholder="Password">
       <button class="btn-primary full" onclick="TST.login()">Login</button>
       <div class="auth-error" id="login-error"></div>
-      <p class="switch-link"><a onclick="TST.showForgotPassword()">Password bhool gaye?</a></p>
       <p class="switch-link">Naya account nahi hai? <a onclick="TST.showSignup()">Sign up</a></p>
     </div>
 
@@ -31,16 +30,6 @@
       <button class="btn-primary full" onclick="TST.signup()">Sign up</button>
       <div class="auth-error" id="signup-error"></div>
       <p class="switch-link">Pehle se account hai? <a onclick="TST.showLogin()">Login</a></p>
-    </div>
-
-    <div id="forgot-form" class="auth-form" style="display:none;">
-      <h2>Reset password</h2>
-      <div style="font-size:13.5px;color:#667781;margin:-4px 0 4px;">Apna registered email daalein — hum aapko password reset karne ka link bhejenge.</div>
-      <input type="email" id="forgot-email" placeholder="Email">
-      <button class="btn-primary full" onclick="TST.forgotPassword()">Send reset link</button>
-      <div class="auth-error" id="forgot-error"></div>
-      <div class="auth-error" id="forgot-success" style="color:var(--green);"></div>
-      <p class="switch-link">Yaad aa gaya? <a onclick="TST.showLogin()">Login</a></p>
     </div>
   </div>
 </div>
@@ -180,6 +169,33 @@
         <input type="file" accept="image/*" id="profile-photo-input" style="display:none" onchange="TST.onProfilePhotoSelected(event)">
       </label>
       <div style="font-size:12.5px;color:#667781;margin-top:10px;text-align:center;">Photo select karte hi turant save ho jayegi.</div>
+
+      <div class="danger-zone">
+        <div class="danger-zone-title">Danger zone</div>
+        <button class="btn-danger-outline" onclick="TST.closeModals();TST.openDeleteAccountModal()">Delete my account</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= DELETE ACCOUNT MODAL ================= -->
+<div class="modal-backdrop" id="delete-account-modal">
+  <div class="modal">
+    <div class="modal-header danger"><span>Delete account</span><span style="cursor:pointer" onclick="TST.closeModals()">✕</span></div>
+    <div class="modal-body" style="padding:18px;">
+      <p style="font-size:13.5px;color:#667781;margin:0 0 14px;">
+        Ye action <b>permanent</b> hai — aap ka account, profile aur naam hamesha ke liye delete ho jayega.
+        Purani chats doosre users ke pass rah sakti hain, lekin aap wapas login nahi kar sakenge.
+      </p>
+      <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Account delete karne ki wajah *</label>
+      <textarea id="delete-reason" rows="3" placeholder="Please batayein aap account kyun delete kar rahe hain…" oninput="TST.validateDeleteForm()"></textarea>
+      <label style="font-size:13px;font-weight:600;display:block;margin:12px 0 6px;">Password se confirm karein *</label>
+      <input type="password" id="delete-password" placeholder="Aapka password" oninput="TST.validateDeleteForm()">
+      <div class="auth-error" id="delete-account-error"></div>
+    </div>
+    <div class="modal-footer" style="display:flex;justify-content:space-between;">
+      <button class="btn-secondary" onclick="TST.closeModals()">Cancel</button>
+      <button class="btn-danger" id="confirm-delete-btn" disabled onclick="TST.confirmDeleteAccount()">Delete my account</button>
     </div>
   </div>
 </div>
