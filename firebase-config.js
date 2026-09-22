@@ -3,10 +3,11 @@
 // Firebase Console > Project Settings > General > Your apps > Web app > Config
 // ==========================================================
 export const firebaseConfig = {
-  apiKey: "PASTE_YOUR_API_KEY",
-  authDomain: "PASTE_YOUR_PROJECT.firebaseapp.com",
-  projectId: "PASTE_YOUR_PROJECT_ID",
-  storageBucket: "PASTE_YOUR_PROJECT.appspot.com",
-  messagingSenderId: "PASTE_YOUR_SENDER_ID",
-  appId: "PASTE_YOUR_APP_ID"
+  apiKey: "AIzaSyAkh-VnR4LWMr49yjGHHE30iZCxbVzpSiQ",
+  authDomain: "tst-b03e5.firebaseapp.com",
+  projectId: "tst-b03e5",
+  storageBucket: "tst-b03e5.firebasestorage.app",
+  messagingSenderId: "949443854361",
+  appId: "1:949443854361:web:df48dc4f5e86e0e04e2a88",
+  measurementId: "G-W2B26BPP07"
 };
