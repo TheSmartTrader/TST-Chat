@@ -46,6 +46,12 @@
         <button class="icon-btn" title="New group" onclick="TST.openNewGroupModal()">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         </button>
+        <button class="icon-btn" title="Online now" onclick="TST.openOnlineModal()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>
+        </button>
+        <button class="icon-btn" title="Profile photo" onclick="TST.openProfileModal()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>
+        </button>
         <button class="icon-btn" title="Logout" onclick="TST.logout()">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
         </button>
@@ -139,6 +145,30 @@
     </div>
     <div class="modal-footer">
       <button class="btn-primary" id="create-group-btn" disabled onclick="TST.createGroup()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= ONLINE NOW MODAL ================= -->
+<div class="modal-backdrop" id="online-modal">
+  <div class="modal">
+    <div class="modal-header"><span>Online now</span><span style="cursor:pointer" onclick="TST.closeModals()">✕</span></div>
+    <div class="modal-body" id="online-list-body"></div>
+  </div>
+</div>
+
+<!-- ================= PROFILE PHOTO MODAL ================= -->
+<div class="modal-backdrop" id="profile-modal">
+  <div class="modal">
+    <div class="modal-header"><span>Profile photo</span><span style="cursor:pointer" onclick="TST.closeModals()">✕</span></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;align-items:center;padding:26px 18px;">
+      <div class="avatar" id="profile-avatar-preview" style="width:110px;height:110px;font-size:34px;margin-bottom:14px;">?</div>
+      <div style="font-weight:600;font-size:15.5px;" id="profile-name-display">—</div>
+      <label class="btn-primary" style="cursor:pointer;margin-top:16px;">
+        Change photo
+        <input type="file" accept="image/*" id="profile-photo-input" style="display:none" onchange="TST.onProfilePhotoSelected(event)">
+      </label>
+      <div style="font-size:12.5px;color:#667781;margin-top:10px;text-align:center;">Photo select karte hi turant save ho jayegi.</div>
     </div>
   </div>
 </div>
