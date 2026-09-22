@@ -19,6 +19,7 @@
       <input type="password" id="login-password" placeholder="Password">
       <button class="btn-primary full" onclick="TST.login()">Login</button>
       <div class="auth-error" id="login-error"></div>
+      <p class="switch-link"><a onclick="TST.showForgotPassword()">Password bhool gaye?</a></p>
       <p class="switch-link">Naya account nahi hai? <a onclick="TST.showSignup()">Sign up</a></p>
     </div>
 
@@ -30,6 +31,16 @@
       <button class="btn-primary full" onclick="TST.signup()">Sign up</button>
       <div class="auth-error" id="signup-error"></div>
       <p class="switch-link">Pehle se account hai? <a onclick="TST.showLogin()">Login</a></p>
+    </div>
+
+    <div id="forgot-form" class="auth-form" style="display:none;">
+      <h2>Reset password</h2>
+      <div style="font-size:13.5px;color:#667781;margin:-4px 0 4px;">Apna registered email daalein — hum aapko password reset karne ka link bhejenge.</div>
+      <input type="email" id="forgot-email" placeholder="Email">
+      <button class="btn-primary full" onclick="TST.forgotPassword()">Send reset link</button>
+      <div class="auth-error" id="forgot-error"></div>
+      <div class="auth-error" id="forgot-success" style="color:var(--green);"></div>
+      <p class="switch-link">Yaad aa gaya? <a onclick="TST.showLogin()">Login</a></p>
     </div>
   </div>
 </div>
