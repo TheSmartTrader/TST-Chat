@@ -27,13 +27,21 @@ const RTC_CONFIG = {
   ]
 };
 
-let currentUser = null;     // { uid, name, email }
+// Kitni der tak koi user "online" mana jaaye agar unka last heartbeat na aaye
+const ONLINE_WINDOW_MS = 35000;   // 35 seconds
+const HEARTBEAT_EVERY_MS = 20000; // har 20 second apna lastSeen update karo
+const ONLINE_REFRESH_MS = 10000;  // har 10 second online dots refresh karo (timer-based expiry ke liye)
+
+let currentUser = null;     // { uid, name, email, photo }
 let allUsers = [];          // other registered users
 let myChats = [];           // chats current user belongs to
 let activeChatId = null;
 let unsubMessages = null;
 let unsubChats = null;
 let unsubUsers = null;
+
+let heartbeatInterval = null;
+let onlineRefreshInterval = null;
 
 let pc = null;              // RTCPeerConnection
 let localStream = null;
@@ -66,7 +74,8 @@ async function signup(){
   try{
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     await setDoc(doc(db, 'users', cred.user.uid), {
-      uid: cred.user.uid, name, email, createdAt: serverTimestamp()
+      uid: cred.user.uid, name, email, photo: null,
+      lastSeen: serverTimestamp(), createdAt: serverTimestamp()
     });
     // onAuthStateChanged will take it from here
   }catch(e){
@@ -87,6 +96,7 @@ async function login(){
 }
 
 async function logout(){
+  stopHeartbeat();
   cleanupCallListeners();
   if(unsubMessages) unsubMessages();
   if(unsubChats) unsubChats();
@@ -106,13 +116,14 @@ function friendlyError(e){
 onAuthStateChanged(auth, async (user)=>{
   if(user){
     const snap = await getDoc(doc(db, 'users', user.uid));
-    const data = snap.exists() ? snap.data() : { name: user.email, email: user.email };
-    currentUser = { uid: user.uid, name: data.name, email: data.email };
+    const data = snap.exists() ? snap.data() : { name: user.email, email: user.email, photo: null };
+    currentUser = { uid: user.uid, name: data.name, email: data.email, photo: data.photo || null };
     document.getElementById('auth-screen').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
     listenUsers();
     listenMyChats();
     listenIncomingCalls();
+    startHeartbeat();
   } else {
     currentUser = null;
     document.getElementById('auth-screen').style.display = 'flex';
@@ -120,15 +131,48 @@ onAuthStateChanged(auth, async (user)=>{
   }
 });
 
+/* ================= PRESENCE (online / offline) ================= */
+function startHeartbeat(){
+  beat();
+  if(heartbeatInterval) clearInterval(heartbeatInterval);
+  heartbeatInterval = setInterval(beat, HEARTBEAT_EVERY_MS);
+
+  if(onlineRefreshInterval) clearInterval(onlineRefreshInterval);
+  onlineRefreshInterval = setInterval(()=>{
+    renderChatList();
+    if(document.getElementById('online-modal').classList.contains('show')) renderOnlineList();
+  }, ONLINE_REFRESH_MS);
+}
+function stopHeartbeat(){
+  if(heartbeatInterval){ clearInterval(heartbeatInterval); heartbeatInterval = null; }
+  if(onlineRefreshInterval){ clearInterval(onlineRefreshInterval); onlineRefreshInterval = null; }
+}
+function beat(){
+  if(!currentUser) return;
+  updateDoc(doc(db,'users',currentUser.uid), { lastSeen: serverTimestamp() }).catch(()=>{});
+}
+function isOnline(u){
+  const t = u?.lastSeen?.toMillis ? u.lastSeen.toMillis() : 0;
+  return !!t && (Date.now() - t) < ONLINE_WINDOW_MS;
+}
+
 /* ================= USERS (contacts) ================= */
 function listenUsers(){
   if(unsubUsers) unsubUsers();
   unsubUsers = onSnapshot(collection(db, 'users'), (snap)=>{
     allUsers = snap.docs.map(d=>d.data()).filter(u=>u.uid !== currentUser.uid);
+    renderChatList();
+    if(activeChatId) renderChatHeader();
+    if(document.getElementById('online-modal').classList.contains('show')) renderOnlineList();
   });
 }
 function getUser(uid){ return allUsers.find(u=>u.uid===uid); }
 function initials(name){ return (name||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
+
+// Naam sirf initials ya photo dikhata hai — email kahin bhi doosre users ko nahi dikhta.
+function avatarInner(name, photo){
+  return photo ? `<img src="${photo}" alt="">` : initials(name);
+}
 
 /* ================= CHATS LIST ================= */
 function listenMyChats(){
@@ -142,10 +186,14 @@ function listenMyChats(){
   });
 }
 
+function chatOtherUser(chat){
+  if(chat.type==='group') return null;
+  const otherUid = chat.members.find(m=>m!==currentUser.uid);
+  return getUser(otherUid);
+}
 function chatDisplayName(chat){
   if(chat.type==='group') return chat.name;
-  const otherUid = chat.members.find(m=>m!==currentUser.uid);
-  const u = getUser(otherUid);
+  const u = chatOtherUser(chat);
   return u ? u.name : 'Unknown user';
 }
 
@@ -156,13 +204,14 @@ function renderChatList(){
   myChats
     .filter(c=> chatDisplayName(c).toLowerCase().includes(q))
     .forEach(chat=>{
+      const other = chatOtherUser(chat);
       const name = chatDisplayName(chat);
       const row = document.createElement('div');
       row.className = 'chat-row' + (chat.id===activeChatId?' active':'');
       row.onclick = ()=> openChat(chat.id);
       const av = document.createElement('div');
       av.className = 'avatar' + (chat.type==='group'?' group':'');
-      av.textContent = initials(name);
+      av.innerHTML = avatarInner(name, other?.photo) + (other && isOnline(other) ? '<span class="online-dot"></span>' : '');
       row.appendChild(av);
       const mid = document.createElement('div');
       mid.className = 'chat-row-mid';
@@ -198,8 +247,9 @@ function openChat(chatId){
   if(unsubMessages) unsubMessages();
   const q = query(collection(db,'chats',chatId,'messages'), orderBy('createdAt','asc'));
   unsubMessages = onSnapshot(q, (snap)=>{
-    const messages = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    const messages = snap.docs.map(d=>({ id:d.id, ...d.data(), pending: d.metadata.hasPendingWrites }));
     renderMessages(messages);
+    markMessagesSeen(chatId, snap.docs);
   });
 
   renderChatList();
@@ -210,16 +260,28 @@ function closeChat(){ document.body.classList.remove('chat-open'); }
 function renderChatHeader(){
   const chat = myChats.find(c=>c.id===activeChatId);
   if(!chat) return;
+  const other = chatOtherUser(chat);
   const name = chatDisplayName(chat);
-  document.getElementById('ch-avatar').className = 'avatar' + (chat.type==='group'?' group':'');
-  document.getElementById('ch-avatar').textContent = initials(name);
+  const avEl = document.getElementById('ch-avatar');
+  avEl.className = 'avatar' + (chat.type==='group'?' group':'');
+  avEl.innerHTML = avatarInner(name, other?.photo);
   document.getElementById('ch-name').textContent = name;
   if(chat.type==='group'){
     const names = chat.members.filter(m=>m!==currentUser.uid).map(uid=>getUser(uid)?.name?.split(' ')[0]||'?').join(', ');
     document.getElementById('ch-status').textContent = names;
   } else {
-    document.getElementById('ch-status').textContent = '';
+    document.getElementById('ch-status').innerHTML = (other && isOnline(other)) ? '<span style="color:var(--green);">online</span>' : '';
   }
+}
+
+// Sirf mere bheje hue messages ke liye tick icon (single = local se send hua,
+// double grey = server tak pohanch gaya, double blue = doosre ne dekh liya)
+function tickSvg(pending, seen){
+  const color = seen ? 'var(--tick-blue)' : 'var(--tick-grey)';
+  if(pending){
+    return `<span class="ticks"><svg width="14" height="11" viewBox="0 0 16 11" fill="none"><path d="M1 5.5L5 9.5L11 1.5" stroke="${color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
+  }
+  return `<span class="ticks"><svg width="16" height="11" viewBox="0 0 16 11" fill="none"><path d="M1 5.5L5 9.5L11 1.5" stroke="${color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.5 5.5L9.5 9.5L15.5 1.5" stroke="${color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
 }
 
 function renderMessages(messages){
@@ -246,7 +308,8 @@ function renderMessages(messages){
     if(chat?.type==='group' && !mine){
       senderHtml = `<span class="sender" style="color:${colorForSender(m.senderName||'')}">${escapeHtml(m.senderName)}</span>`;
     }
-    bubble.innerHTML = `${senderHtml}<span class="msg-text">${escapeHtml(m.text)}</span><span class="meta">${formatTime(created)}</span>`;
+    const ticksHtml = mine ? tickSvg(!!m.pending, m.status==='seen') : '';
+    bubble.innerHTML = `${senderHtml}<span class="msg-text">${escapeHtml(m.text)}</span><span class="meta">${formatTime(created)}${ticksHtml}</span>`;
     row.appendChild(bubble);
     wrap.appendChild(row);
   });
@@ -258,13 +321,24 @@ function colorForSender(name){
   return colors[Math.abs(h)%colors.length];
 }
 
+// Jo bhi messages mere pass abhi khuli hui chat mein dikhe aur mere nahi bheje
+// hue hain, unko "seen" mark kar do — jisse bhejne wale ko blue double-tick dikhega.
+function markMessagesSeen(chatId, docs){
+  docs.forEach(d=>{
+    const data = d.data();
+    if(data.senderId !== currentUser.uid && data.status !== 'seen'){
+      updateDoc(doc(db,'chats',chatId,'messages',d.id), { status:'seen' }).catch(()=>{});
+    }
+  });
+}
+
 async function sendMessage(){
   const input = document.getElementById('msg-input');
   const text = input.value.trim();
   if(!text || !activeChatId) return;
   input.value = '';
   await addDoc(collection(db,'chats',activeChatId,'messages'), {
-    senderId: currentUser.uid, senderName: currentUser.name, text, createdAt: serverTimestamp()
+    senderId: currentUser.uid, senderName: currentUser.name, text, status:'sent', createdAt: serverTimestamp()
   });
   await updateDoc(doc(db,'chats',activeChatId), {
     lastMessage: text, lastMessageTime: serverTimestamp()
@@ -273,8 +347,7 @@ async function sendMessage(){
 
 /* ================= NEW CHAT / GROUP ================= */
 function closeModals(){
-  document.getElementById('new-chat-modal').classList.remove('show');
-  document.getElementById('new-group-modal').classList.remove('show');
+  document.querySelectorAll('.modal-backdrop.show').forEach(m=>m.classList.remove('show'));
 }
 function openNewChatModal(){
   const box = document.getElementById('new-chat-contacts');
@@ -285,9 +358,8 @@ function openNewChatModal(){
   allUsers.forEach(u=>{
     const row = document.createElement('div');
     row.className='contact-pick';
-    row.innerHTML = `<div class="avatar" style="width:40px;height:40px;font-size:14px;">${initials(u.name)}</div>
-      <div><div style="font-weight:600;font-size:14.5px;">${escapeHtml(u.name)}</div>
-      <div style="font-size:12.5px;color:#667781;">${escapeHtml(u.email)}</div></div>`;
+    row.innerHTML = `<div class="avatar" style="width:40px;height:40px;font-size:14px;">${avatarInner(u.name,u.photo)}${isOnline(u)?'<span class="online-dot"></span>':''}</div>
+      <div><div style="font-weight:600;font-size:14.5px;">${escapeHtml(u.name)}</div></div>`;
     row.onclick = async ()=>{
       closeModals();
       const chatId = [currentUser.uid, u.uid].sort().join('_');
@@ -314,7 +386,7 @@ function openNewGroupModal(){
     const row = document.createElement('div');
     row.className='contact-pick';
     row.innerHTML = `<input type="checkbox" id="grp-${u.uid}">
-      <div class="avatar" style="width:40px;height:40px;font-size:14px;">${initials(u.name)}</div>
+      <div class="avatar" style="width:40px;height:40px;font-size:14px;">${avatarInner(u.name,u.photo)}</div>
       <div style="font-weight:600;font-size:14.5px;">${escapeHtml(u.name)}</div>`;
     row.querySelector('input').onchange = (e)=>{
       if(e.target.checked) groupSelection.add(u.uid); else groupSelection.delete(u.uid);
@@ -345,6 +417,76 @@ async function createGroup(){
   });
   closeModals();
   openChat(ref.id);
+}
+
+/* ================= ONLINE NOW MODAL ================= */
+function openOnlineModal(){
+  renderOnlineList();
+  document.getElementById('online-modal').classList.add('show');
+}
+function renderOnlineList(){
+  const box = document.getElementById('online-list-body');
+  const onlineUsers = allUsers.filter(isOnline);
+  box.innerHTML = '';
+  if(onlineUsers.length===0){
+    box.innerHTML = '<div style="padding:16px 18px;color:#667781;font-size:13.5px;">Abhi koi online nahi hai.</div>';
+    return;
+  }
+  onlineUsers.forEach(u=>{
+    const row = document.createElement('div');
+    row.className = 'contact-pick';
+    row.style.cursor = 'default';
+    row.innerHTML = `<div class="avatar" style="width:40px;height:40px;font-size:14px;">${avatarInner(u.name,u.photo)}<span class="online-dot"></span></div>
+      <div style="font-weight:600;font-size:14.5px;">${escapeHtml(u.name)}</div>`;
+    box.appendChild(row);
+  });
+}
+
+/* ================= PROFILE PHOTO ================= */
+function openProfileModal(){
+  document.getElementById('profile-avatar-preview').innerHTML = avatarInner(currentUser.name, currentUser.photo);
+  document.getElementById('profile-name-display').textContent = currentUser.name;
+  document.getElementById('profile-modal').classList.add('show');
+}
+
+// Chuni hui photo ko chhote square (200x200) crop + compress karta hai taake
+// Firestore document ke andar aasani se fit ho jaaye, phir turant save karta hai.
+function resizeImageToDataUrl(file, size){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onerror = ()=> reject(new Error('File padhi nahi ja saki.'));
+    reader.onload = ()=>{
+      const img = new Image();
+      img.onerror = ()=> reject(new Error('Ye image kholi nahi ja saki.'));
+      img.onload = ()=>{
+        const canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const s = Math.min(img.width, img.height);
+        const sx = (img.width - s)/2, sy = (img.height - s)/2;
+        ctx.drawImage(img, sx, sy, s, s, 0, 0, size, size);
+        resolve(canvas.toDataURL('image/jpeg', 0.72));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function onProfilePhotoSelected(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  try{
+    const dataUrl = await resizeImageToDataUrl(file, 200);
+    await updateDoc(doc(db,'users',currentUser.uid), { photo: dataUrl });
+    currentUser.photo = dataUrl;
+    document.getElementById('profile-avatar-preview').innerHTML = avatarInner(currentUser.name, dataUrl);
+    renderChatList();
+    if(activeChatId) renderChatHeader();
+  }catch(err){
+    alert('Photo save nahi ho saki: ' + (err.message || err));
+  }
+  e.target.value = '';
 }
 
 /* ================= VOICE CALLING (WebRTC + Firestore signaling) ================= */
@@ -385,7 +527,7 @@ async function startCall(){
     status: 'ringing', createdAt: serverTimestamp()
   });
 
-  showCallOverlay(calleeUser?.name || 'Unknown', true);
+  showCallOverlay(calleeUser?.name || 'Unknown', true, calleeUser?.photo);
 
   unsubCallDoc = onSnapshot(callDocRef, async (snap)=>{
     const data = snap.data();
@@ -414,16 +556,16 @@ function listenIncomingCalls(){
     snap.docChanges().forEach(change=>{
       if(change.type==='added'){
         const data = change.doc.data();
-        showIncomingBanner(change.doc.id, data.callerName);
+        showIncomingBanner(change.doc.id, data.callerName, getUser(data.callerId)?.photo);
       }
     });
   });
 }
 
 let pendingIncomingCallId = null;
-function showIncomingBanner(callId, callerName){
+function showIncomingBanner(callId, callerName, callerPhoto){
   pendingIncomingCallId = callId;
-  document.getElementById('incoming-avatar').textContent = initials(callerName);
+  document.getElementById('incoming-avatar').innerHTML = avatarInner(callerName, callerPhoto);
   document.getElementById('incoming-name').textContent = callerName;
   document.getElementById('incoming-call').classList.add('show');
 }
@@ -462,7 +604,7 @@ async function acceptCall(){
     answer: { type: answer.type, sdp: answer.sdp }, status:'accepted'
   });
 
-  showCallOverlay(data.callerName, false);
+  showCallOverlay(data.callerName, false, getUser(data.callerId)?.photo);
   document.getElementById('call-status').textContent = '00:00';
   document.getElementById('call-status').classList.remove('ringing');
   startCallTimer();
@@ -486,8 +628,8 @@ async function declineCall(){
   pendingIncomingCallId = null;
 }
 
-function showCallOverlay(name, isCaller){
-  document.getElementById('call-avatar').textContent = initials(name);
+function showCallOverlay(name, isCaller, photo){
+  document.getElementById('call-avatar').innerHTML = avatarInner(name, photo);
   document.getElementById('call-name').textContent = name;
   document.getElementById('call-status').textContent = isCaller ? 'Calling…' : 'Connecting…';
   document.getElementById('call-status').classList.add('ringing');
@@ -536,7 +678,7 @@ function teardownCall(logMessage){
       const s=(callSeconds%60).toString().padStart(2,'0');
       const text = callSeconds>0 ? `📞 Voice call · ${m}:${s}` : `📞 Call ended`;
       addDoc(collection(db,'chats',activeChatId,'messages'), {
-        senderId: currentUser.uid, senderName: currentUser.name, text, createdAt: serverTimestamp()
+        senderId: currentUser.uid, senderName: currentUser.name, text, status:'sent', createdAt: serverTimestamp()
       });
       updateDoc(doc(db,'chats',activeChatId), { lastMessage:text, lastMessageTime: serverTimestamp() });
     }
@@ -555,5 +697,6 @@ window.TST = {
   showLogin, showSignup, signup, login, logout,
   renderChatList, openChat, closeChat, sendMessage,
   openNewChatModal, openNewGroupModal, closeModals, validateGroupForm, createGroup,
+  openOnlineModal, openProfileModal, onProfilePhotoSelected,
   startCall, acceptCall, declineCall, toggleMute, endCall
 };
